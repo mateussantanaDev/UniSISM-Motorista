@@ -4,6 +4,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/errors/api_exception.dart';
 import '../../../core/theme/tokens.dart';
 import '../../../core/theme/typography.dart';
+import '../../../data/auth/biometric_service.dart';
+import '../../../data/auth/secure_token_storage.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/toast_controller.dart';
 import '../../widgets/form_field.dart';
@@ -19,14 +21,91 @@ class LoginScreen extends ConsumerStatefulWidget {
 class _LoginScreenState extends ConsumerState<LoginScreen> {
   final _matriculaCtrl = TextEditingController();
   final _senhaCtrl = TextEditingController();
+  final _storage = const SecureTokenStorage();
   bool _loading = false;
   String? _erro;
+
+  bool _biometriaDisponivel = false;
+  String _rotuloBiometria = 'Biometria';
+  bool _lembrarBiometria = true;
+  ({String identificador, String senha})? _credenciaisSalvas;
 
   @override
   void initState() {
     super.initState();
     final cacheada = ref.read(authControllerProvider).matriculaCacheada;
     if (cacheada != null) _matriculaCtrl.text = cacheada;
+    WidgetsBinding.instance.addPostFrameCallback((_) => _checarBiometria());
+  }
+
+  Future<void> _checarBiometria() async {
+    final bioSvc = ref.read(biometricServiceProvider);
+    final disponivel = await bioSvc.isAvailable();
+    if (!mounted) return;
+
+    if (disponivel) {
+      final rotulo = await bioSvc.getBiometricLabel();
+      final creds = await _storage.getCredenciaisBiometria();
+      if (!mounted) return;
+      setState(() {
+        _biometriaDisponivel = true;
+        _rotuloBiometria = rotulo;
+        _credenciaisSalvas = creds;
+      });
+
+      if (creds != null) {
+        _matriculaCtrl.text = creds.identificador;
+        _senhaCtrl.text = creds.senha;
+        await _tentarLoginBiometrico(silent: true);
+      }
+    }
+  }
+
+  Future<void> _tentarLoginBiometrico({bool silent = false}) async {
+    if (_loading || _credenciaisSalvas == null) return;
+
+    final bioSvc = ref.read(biometricServiceProvider);
+    final autenticado = await bioSvc.authenticate(
+      reason: 'Use $_rotuloBiometria para acessar suas viagens no UNISISM',
+    );
+
+    if (!autenticado) {
+      if (!silent && mounted) {
+        ref.read(toastControllerProvider.notifier).warning(
+          'Autenticação com $_rotuloBiometria cancelada.',
+          title: 'Não autenticado',
+        );
+      }
+      return;
+    }
+
+    if (!mounted) return;
+
+    setState(() {
+      _loading = true;
+      _erro = null;
+    });
+
+    final toasts = ref.read(toastControllerProvider.notifier);
+    try {
+      await ref.read(authControllerProvider.notifier).login(
+        matricula: _credenciaisSalvas!.identificador,
+        senha: _credenciaisSalvas!.senha,
+        salvarBiometria: true,
+      );
+    } on ApiException catch (e, st) {
+      debugPrint('[LOGIN-BIO] ApiException: ${e.code} · ${e.message}\n$st');
+      final msg = e.mensagemAmigavel;
+      if (mounted) setState(() => _erro = msg);
+      toasts.error(msg, title: _toastTitleFor(e));
+    } catch (e, st) {
+      debugPrint('[LOGIN-BIO] erro inesperado: $e\n$st');
+      const msg = 'Não foi possível entrar. Digite sua senha.';
+      if (mounted) setState(() => _erro = msg);
+      toasts.error(msg, title: 'Erro');
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
   }
 
   @override
@@ -37,24 +116,33 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   }
 
   Future<void> _submit() async {
-    final matricula = _matriculaCtrl.text.trim();
+    final raw = _matriculaCtrl.text.trim();
     final senha = _senhaCtrl.text;
-    if (matricula.isEmpty || senha.isEmpty) {
+    if (raw.isEmpty || senha.isEmpty) {
       ref.read(toastControllerProvider.notifier).warning(
-        'Preencha matrícula e senha pra continuar.',
+        'Preencha CPF ou matrícula e senha pra continuar.',
         title: 'Faltam dados',
       );
       return;
     }
+
+    final cleanDigits = raw.replaceAll(RegExp(r'\D'), '');
+    final identificador = cleanDigits.length == 11 ? cleanDigits : raw;
+
     setState(() {
       _loading = true;
       _erro = null;
     });
     final toasts = ref.read(toastControllerProvider.notifier);
     try {
-      await ref
-          .read(authControllerProvider.notifier)
-          .login(matricula: matricula, senha: senha);
+      await ref.read(authControllerProvider.notifier).login(
+        matricula: identificador,
+        senha: senha,
+        salvarBiometria: _biometriaDisponivel && _lembrarBiometria,
+      );
+      if (!_lembrarBiometria) {
+        await _storage.clearBiometria();
+      }
       // Sucesso: o router redireciona automaticamente — nada a fazer aqui.
     } on ApiException catch (e, st) {
       debugPrint('[LOGIN] ApiException: ${e.code} · ${e.message}\n$st');
@@ -91,6 +179,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             child: SafeArea(
               top: false,
               child: SingleChildScrollView(
+                keyboardDismissBehavior:
+                    ScrollViewKeyboardDismissBehavior.onDrag,
                 padding: const EdgeInsets.fromLTRB(24, 32, 24, 24),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -107,20 +197,20 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     ),
                     const SizedBox(height: 6),
                     Text(
-                      'Entre com sua matrícula para ver suas viagens.',
+                      'Entre com seu CPF ou matrícula para ver suas viagens.',
                       style: AppTypography.bodySm.copyWith(
                         color: Tokens.textSecondary,
                       ),
                     ),
                     const SizedBox(height: 28),
                     AppFormField(
-                      label: 'Matrícula',
+                      label: 'CPF ou Matrícula',
                       controller: _matriculaCtrl,
                       type: AppFieldType.text,
                       mono: true,
                       autofocus: _matriculaCtrl.text.isEmpty,
                       textInputAction: TextInputAction.next,
-                      hint: 'Ex.: MOT-345678',
+                      hint: 'Ex.: 000.000.000-00 ou MOT-345678',
                     ),
                     const SizedBox(height: 20),
                     AppFormField(
@@ -130,11 +220,41 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       textInputAction: TextInputAction.done,
                       onSubmitted: (_) => _submit(),
                     ),
+                    if (_biometriaDisponivel) ...[
+                      const SizedBox(height: 14),
+                      InkWell(
+                        onTap: () => setState(() => _lembrarBiometria = !_lembrarBiometria),
+                        child: Row(
+                          children: [
+                            SizedBox(
+                              width: 24,
+                              height: 24,
+                              child: Checkbox(
+                                value: _lembrarBiometria,
+                                activeColor: Tokens.blue900,
+                                onChanged: (v) =>
+                                    setState(() => _lembrarBiometria = v ?? false),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                'Entrar com $_rotuloBiometria nas próximas vezes',
+                                style: AppTypography.bodySm.copyWith(
+                                  color: Tokens.textPrimary,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
                     if (_erro != null) ...[
                       const SizedBox(height: 16),
                       _ErroBanner(message: _erro!),
                     ],
-                    const SizedBox(height: 28),
+                    const SizedBox(height: 24),
                     PrimaryButton(
                       label: 'Entrar',
                       leading: Icons.lock_open,
@@ -142,6 +262,19 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       loading: _loading,
                       onPressed: _submit,
                     ),
+                    if (_biometriaDisponivel && _credenciaisSalvas != null) ...[
+                      const SizedBox(height: 12),
+                      PrimaryButton(
+                        label: 'Entrar com $_rotuloBiometria',
+                        leading: _rotuloBiometria == 'Face ID'
+                            ? Icons.face
+                            : Icons.fingerprint,
+                        variant: ButtonVariant.secondary,
+                        fullWidth: true,
+                        loading: _loading,
+                        onPressed: () => _tentarLoginBiometrico(silent: false),
+                      ),
+                    ],
                     const SizedBox(height: 20),
                     const _AjudaBlock(),
                   ],

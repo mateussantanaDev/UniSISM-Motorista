@@ -37,6 +37,8 @@ class OutboxProcessor {
     _running = true;
     int sent = 0;
     try {
+      await outboxDao.recoverOfflineFailed();
+
       while (true) {
         final batch = await outboxDao.pending(limit: 20);
         if (batch.isEmpty) break;
@@ -44,7 +46,7 @@ class OutboxProcessor {
           final ok = await _process(row);
           if (ok) sent++;
         }
-        // Se o backend está fora, evita loop infinito de RETRYING.
+        // Se o backend está fora ou todos os itens falharam, evita loop infinito.
         if (batch.every((r) => r.lastError != null)) break;
       }
     } finally {
@@ -65,9 +67,8 @@ class OutboxProcessor {
         return false;
       }
       if (e.isOffline) {
-        await outboxDao.markRetrying(row.id);
-        await outboxDao.markFailed(row.id, e.message);
-        return false;
+        await outboxDao.markOffline(row.id, e.message);
+        rethrow;
       }
       if (e.isUnauthorized || (e.status != null && e.status! >= 500)) {
         if (row.attempts + 1 >= _maxAttempts) {

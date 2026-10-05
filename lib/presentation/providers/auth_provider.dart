@@ -129,6 +129,8 @@ class AuthController extends Notifier<AuthState> {
             ),
             matriculaCacheada: matricula,
           );
+          ref.read(syncEngineProvider).start();
+          unawaited(ref.read(pushBootstrapProvider).start());
         } else {
           state = AuthState(
             status: AuthStatus.loggedOut,
@@ -143,10 +145,17 @@ class AuthController extends Notifier<AuthState> {
   Future<void> login({
     required String matricula,
     required String senha,
+    bool salvarBiometria = false,
   }) async {
     state = state.copyWith(clearError: true);
     try {
       final session = await _api.login(matricula: matricula, senha: senha);
+      if (salvarBiometria) {
+        await _storage.saveCredenciaisBiometria(
+          identificador: matricula,
+          senha: senha,
+        );
+      }
       await _persist(session, matricula);
     } on ApiException catch (e) {
       state = state.copyWith(error: e.message);
@@ -177,6 +186,13 @@ class AuthController extends Notifier<AuthState> {
     required String novaSenha,
   }) async {
     await _api.trocarSenha(senhaAtual: senhaAtual, novaSenha: novaSenha);
+    final creds = await _storage.getCredenciaisBiometria();
+    if (creds != null) {
+      await _storage.saveCredenciaisBiometria(
+        identificador: creds.identificador,
+        senha: novaSenha,
+      );
+    }
     state = state.copyWith(status: AuthStatus.loggedIn);
     ref.read(syncEngineProvider).start();
     unawaited(ref.read(pushBootstrapProvider).start());

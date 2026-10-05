@@ -104,6 +104,34 @@ class OutboxDao extends DatabaseAccessor<AppDatabase>
     );
   }
 
+  /// Marca a mutação para retry por falta de rede sem queimar a contagem de tentativas.
+  Future<void> markOffline(int id, String error) {
+    return (update(outbox)..where((o) => o.id.equals(id))).write(
+      OutboxCompanion(
+        status: const Value(OutboxStatus.retrying),
+        lastAttemptAt: Value(DateTime.now()),
+        lastError: Value(error),
+      ),
+    );
+  }
+
+  /// Recupera mutações marcadas como FAILED por erro transitório de rede offline.
+  Future<int> recoverOfflineFailed() {
+    return (update(outbox)
+          ..where((o) =>
+              o.status.equals(OutboxStatus.failed) &
+              (o.lastError.like('%conexão%') |
+               o.lastError.like('%offline%') |
+               o.lastError.like('%connection%') |
+               o.lastError.like('%SocketException%') |
+               o.lastError.like('%Sem conexão%'))))
+        .write(
+      const OutboxCompanion(
+        status: Value(OutboxStatus.retrying),
+      ),
+    );
+  }
+
   Future<int> _attemptsOf(int id) async {
     final row = await (select(outbox)..where((o) => o.id.equals(id)))
         .getSingleOrNull();

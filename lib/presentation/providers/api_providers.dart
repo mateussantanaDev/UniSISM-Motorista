@@ -15,7 +15,7 @@ import '../../data/api/tfd_api_remote.dart';
 String resolveApiBaseUrl() {
   const custom = String.fromEnvironment('API_BASE_URL');
   if (custom.isNotEmpty) return custom;
-  return 'https://184.107.179.209.nip.io/v1';
+  return 'http://184.107.179.209:3333/v1';
 }
 
 /// Token JWT do motorista. Atualizado pelo `AuthController` no login e
@@ -33,16 +33,16 @@ final dioProvider = Provider<Dio>((ref) {
   final dio = Dio(
     BaseOptions(
       baseUrl: resolveApiBaseUrl(),
-      connectTimeout: const Duration(seconds: 6),
-      receiveTimeout: const Duration(seconds: 12),
-      sendTimeout: const Duration(seconds: 12),
+      connectTimeout: const Duration(seconds: 10),
+      receiveTimeout: const Duration(seconds: 15),
+      sendTimeout: const Duration(seconds: 15),
       headers: {
         'Accept': 'application/json',
         'X-API-Version': '1',
         'X-Client': 'unisism-motorista/0.1.0',
         'x-api-key': const String.fromEnvironment(
           'API_KEY',
-          defaultValue: 'fLi_lF93PiFM2bvcIZEfE2sif8xr9or8QTlheT2RvIcjus2-j50OQ5nW-eF_Rx5x',
+          defaultValue: 'unisism-frontend-2026-4f2b8d9e',
         ),
       },
     ),

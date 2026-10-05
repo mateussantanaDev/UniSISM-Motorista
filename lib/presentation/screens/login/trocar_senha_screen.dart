@@ -96,6 +96,8 @@ class _TrocarSenhaState extends ConsumerState<TrocarSenhaScreen> {
       backgroundColor: Tokens.pageBackground,
       body: SafeArea(
         child: SingleChildScrollView(
+          keyboardDismissBehavior:
+              ScrollViewKeyboardDismissBehavior.onDrag,
           padding: const EdgeInsets.fromLTRB(24, 32, 24, 24),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,

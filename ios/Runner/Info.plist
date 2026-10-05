@@ -72,6 +72,8 @@
 	<string>O UNISISM Motorista acessa a galeria para anexar comprovantes de abastecimento.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>O UNISISM Motorista usa a localização para exibir a viagem atual no mapa.</string>
+	<key>NSFaceIDUsageDescription</key>
+	<string>O UNISISM Motorista usa o Face ID para autenticar e acessar o aplicativo com segurança.</string>
 	<!-- DEV: permite HTTP para backend local. EM PRODUÇÃO, remover NSAllowsArbitraryLoads e usar NSExceptionDomains restrito. -->
 	<key>NSAppTransportSecurity</key>
 	<dict>

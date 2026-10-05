@@ -19,7 +19,7 @@ class UnisismMotoristaApp extends ConsumerWidget {
       builder: (context, child) {
         return GestureDetector(
           onTap: () => FocusManager.instance.primaryFocus?.unfocus(),
-          behavior: HitTestBehavior.translucent,
+          behavior: HitTestBehavior.opaque,
           child: ToastOverlay(child: child ?? const SizedBox.shrink()),
         );
       },

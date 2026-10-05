@@ -38,10 +38,12 @@ flutter pub get
 
 # 3. Rodar contra o backend (consome /v1/motorista-app/*)
 #    Backend documentado em unisism-ubs/backend/docs/MOTORISTA_APP_API.md
-flutter run --dart-define=API_BASE_URL=http://10.0.2.2:3333/v1
+flutter run
+# Ou apontar para outro backend:
+flutter run --dart-define=API_BASE_URL=http://184.107.179.209:3333/v1
 ```
 
-> O app **não tem mais mock**. Consome só o backend real. Sem internet
+> O app **não tem mais mock**. Consome só o backend real (default: `http://184.107.179.209:3333/v1`). Sem internet
 > e sem backend, o app mostra a tela de "Sem internet" do sync indicator
 > e cai no cache local (Drift SQLite) se houver dados sincronizados de
 > sessões anteriores.
@@ -50,16 +52,17 @@ flutter run --dart-define=API_BASE_URL=http://10.0.2.2:3333/v1
 
 | Cenário | `API_BASE_URL` |
 |---|---|
-| Android emulator (default dev) | `http://10.0.2.2:3333/v1` |
-| iOS Simulator | `http://localhost:3333/v1` |
-| Device físico (mesma Wi-Fi) | `http://<IP-DO-PC>:3333/v1` |
+| Servidor padrão | `http://184.107.179.209:3333/v1` (default) |
+| Android emulator (dev local) | `http://10.0.2.2:3333/v1` |
+| iOS Simulator (dev local) | `http://localhost:3333/v1` |
 | Produção | `https://api.unisism.aguasbelas.pe.gov.br/v1` |
 
 ### Flags úteis
 
 | Flag | Efeito |
 |---|---|
-| `--dart-define=API_BASE_URL=<url>` | Sobrescreve a base URL. Sem isto, default é `http://10.0.2.2:3333/v1` (Android) ou `http://localhost:3333/v1` (iOS). |
+| `--dart-define=API_BASE_URL=<url>` | Sobrescreve a base URL (default: `http://184.107.179.209:3333/v1`). |
+| `--dart-define=API_KEY=<key>` | Sobrescreve a chave do header `x-api-key`. |
 
 ---
 

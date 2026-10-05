@@ -66,6 +66,7 @@ class _AppFormFieldState extends State<AppFormField> {
               initialValue: widget.initialValue,
               onChanged: widget.onChanged,
               onFieldSubmitted: widget.onSubmitted,
+              onTapOutside: (_) => FocusManager.instance.primaryFocus?.unfocus(),
               readOnly: widget.readOnly || widget.loading,
               autofocus: widget.autofocus,
               textInputAction: widget.textInputAction,
